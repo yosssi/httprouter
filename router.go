@@ -83,7 +83,7 @@ import (
 // Handle is a function that can be registered to a route to handle HTTP
 // requests. Like http.HandlerFunc, but has a third parameter for the values of
 // wildcards (variables).
-type Handle func(http.ResponseWriter, *http.Request, Params, *RequestContext)
+type Handle func(ResponseWriter, *http.Request, Params, *RequestContext)
 
 // Param is a single URL parameter, consisting of a key and a value.
 type Param struct {
@@ -215,7 +215,7 @@ func (r *Router) Handle(method, path string, handle Handle) {
 // request handle.
 func (r *Router) Handler(method, path string, handler http.Handler) {
 	r.Handle(method, path,
-		func(w http.ResponseWriter, req *http.Request, _ Params, _ *RequestContext) {
+		func(w ResponseWriter, req *http.Request, _ Params, _ *RequestContext) {
 			handler.ServeHTTP(w, req)
 		},
 	)
@@ -225,7 +225,7 @@ func (r *Router) Handler(method, path string, handler http.Handler) {
 // request handle.
 func (r *Router) HandlerFunc(method, path string, handler http.HandlerFunc) {
 	r.Handle(method, path,
-		func(w http.ResponseWriter, req *http.Request, _ Params, _ *RequestContext) {
+		func(w ResponseWriter, req *http.Request, _ Params, _ *RequestContext) {
 			handler(w, req)
 		},
 	)
@@ -248,7 +248,7 @@ func (r *Router) ServeFiles(path string, root http.FileSystem) {
 
 	fileServer := http.FileServer(root)
 
-	r.GET(path, func(w http.ResponseWriter, req *http.Request, ps Params, _ *RequestContext) {
+	r.GET(path, func(w ResponseWriter, req *http.Request, ps Params, _ *RequestContext) {
 		req.URL.Path = ps.ByName("filepath")
 		fileServer.ServeHTTP(w, req)
 	})
@@ -275,18 +275,22 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		defer r.recv(w, req)
 	}
 
+	// Create a response writer.
+	res := newResponseWriter(w)
+
+	// Create a request context.
 	reqCtx := NewRequestContext()
 
 	// Invoke the pre handle if it exists.
 	if r.PreHandle != nil {
-		r.PreHandle(w, req, nil, reqCtx)
+		r.PreHandle(res, req, nil, reqCtx)
 	}
 
 	if root := r.trees[req.Method]; root != nil {
 		path := req.URL.Path
 
 		if handle, ps, tsr := root.getValue(path); handle != nil {
-			handle(w, req, ps, reqCtx)
+			handle(res, req, ps, reqCtx)
 			return
 		} else if req.Method != "CONNECT" {
 			code := 301 // Permanent redirect, request with GET method
@@ -330,7 +334,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	// Invoke the post handle if it exists.
 	if r.PostHandle != nil {
-		r.PostHandle(w, req, nil, reqCtx)
+		r.PostHandle(res, req, nil, reqCtx)
 	}
 }
 

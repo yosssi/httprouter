@@ -26,7 +26,7 @@ func printChildren(n *node, prefix string) {
 var fakeHandlerValue string
 
 func fakeHandler(val string) Handle {
-	return func(http.ResponseWriter, *http.Request, Params, *RequestContext) {
+	return func(ResponseWriter, *http.Request, Params, *RequestContext) {
 		fakeHandlerValue = val
 	}
 }
