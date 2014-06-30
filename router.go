@@ -281,6 +281,13 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Create a request context.
 	reqCtx := NewRequestContext()
 
+	defer func() {
+		// Invoke the post handle if it exists.
+		if r.PostHandle != nil {
+			r.PostHandle(res, req, nil, reqCtx)
+		}
+	}()
+
 	// Invoke the pre handle if it exists.
 	if r.PreHandle != nil {
 		r.PreHandle(res, req, nil, reqCtx)
@@ -327,14 +334,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	// Handle 404
 	if r.NotFound != nil {
-		r.NotFound(w, req)
+		r.NotFound(res, req)
 	} else {
-		http.NotFound(w, req)
-	}
-
-	// Invoke the post handle if it exists.
-	if r.PostHandle != nil {
-		r.PostHandle(res, req, nil, reqCtx)
+		http.NotFound(res, req)
 	}
 }
 
