@@ -17,8 +17,8 @@ func (reqCtx *RequestContext) GetValue(key string) (interface{}, bool) {
 	return value, ok
 }
 
-// SetData sets the key/value to the request context.
-func (reqCtx *RequestContext) SetData(key string, value interface{}) {
+// SetValue sets the key/value to the request context.
+func (reqCtx *RequestContext) SetValue(key string, value interface{}) {
 	reqCtx.mutex.Lock()
 	defer reqCtx.mutex.Unlock()
 	reqCtx.kv[key] = value
