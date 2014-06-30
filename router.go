@@ -83,7 +83,7 @@ import (
 // Handle is a function that can be registered to a route to handle HTTP
 // requests. Like http.HandlerFunc, but has a third parameter for the values of
 // wildcards (variables).
-type Handle func(http.ResponseWriter, *http.Request, Params)
+type Handle func(http.ResponseWriter, *http.Request, Params, *RequestContext)
 
 // Param is a single URL parameter, consisting of a key and a value.
 type Param struct {
@@ -140,6 +140,12 @@ type Router struct {
 	// The handler can be used to keep your server from crashing because of
 	// unrecovered panics.
 	PanicHandler func(http.ResponseWriter, *http.Request, interface{})
+
+	// PreHandle represents a handle which is invoked before the main handle is invoked.
+	PreHandle Handle
+
+	// PostHandle represents a handle which is invoked after the main handle is invoked.
+	PostHandle Handle
 }
 
 // Make sure the Router conforms with the http.Handler interface
@@ -209,7 +215,7 @@ func (r *Router) Handle(method, path string, handle Handle) {
 // request handle.
 func (r *Router) Handler(method, path string, handler http.Handler) {
 	r.Handle(method, path,
-		func(w http.ResponseWriter, req *http.Request, _ Params) {
+		func(w http.ResponseWriter, req *http.Request, _ Params, _ *RequestContext) {
 			handler.ServeHTTP(w, req)
 		},
 	)
@@ -219,7 +225,7 @@ func (r *Router) Handler(method, path string, handler http.Handler) {
 // request handle.
 func (r *Router) HandlerFunc(method, path string, handler http.HandlerFunc) {
 	r.Handle(method, path,
-		func(w http.ResponseWriter, req *http.Request, _ Params) {
+		func(w http.ResponseWriter, req *http.Request, _ Params, _ *RequestContext) {
 			handler(w, req)
 		},
 	)
@@ -242,7 +248,7 @@ func (r *Router) ServeFiles(path string, root http.FileSystem) {
 
 	fileServer := http.FileServer(root)
 
-	r.GET(path, func(w http.ResponseWriter, req *http.Request, ps Params) {
+	r.GET(path, func(w http.ResponseWriter, req *http.Request, ps Params, _ *RequestContext) {
 		req.URL.Path = ps.ByName("filepath")
 		fileServer.ServeHTTP(w, req)
 	})
@@ -269,11 +275,18 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		defer r.recv(w, req)
 	}
 
+	reqCtx := NewRequestContext()
+
+	// Invoke the pre handle if it exists.
+	if r.PreHandle != nil {
+		r.PreHandle(w, req, nil, reqCtx)
+	}
+
 	if root := r.trees[req.Method]; root != nil {
 		path := req.URL.Path
 
 		if handle, ps, tsr := root.getValue(path); handle != nil {
-			handle(w, req, ps)
+			handle(w, req, ps, reqCtx)
 			return
 		} else if req.Method != "CONNECT" {
 			code := 301 // Permanent redirect, request with GET method
@@ -314,4 +327,19 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	} else {
 		http.NotFound(w, req)
 	}
+
+	// Invoke the post handle if it exists.
+	if r.PostHandle != nil {
+		r.PostHandle(w, req, nil, reqCtx)
+	}
+}
+
+// Pre sets a pre handle to the router.
+func (r *Router) Pre(handle Handle) {
+	r.PreHandle = handle
+}
+
+// Post sets a post handle to the router.
+func (r *Router) Post(handle Handle) {
+	r.PostHandle = handle
 }
